@@ -127,3 +127,29 @@ Lighting_shopping/
 | Phase 2 · 诊断 Agent | ✅ 完成 |
 | Phase 2 · LightGBM 模型 + RAG 知识库 | ✅ 完成 |
 | Phase 3 · 复盘 + AB实验 + 闭环（全阶段完成） | ✅ 完成 |
+
+---
+
+## Vercel 部署
+
+API 已配置 Vercel 一键部署：
+
+```bash
+# 1. 安装 Vercel CLI
+npm i -g vercel
+
+# 2. 部署
+cd /Users/heguoliang/Documents/ai_projects/Lighting_shopping
+vercel
+```
+
+**部署结构**：
+- `api/index.py` — ASGI 入口（自动发现，代理到 `backend/main.py`）
+- `vercel.json` — 构建 & 路由配置
+- `requirements.txt` — 根目录依赖声明（API 所需，不含 Streamlit）
+
+**注意事项**：
+- 需要设置环境变量 `LLM_API_KEY`：`vercel env add LLM_API_KEY` 或在 Vercel Dashboard 添加
+- SQLite 在 Vercel 上不持久（Serverless 无状态），演示请先本地生成 mock 数据
+- LLM 调用（DeepSeek）耗时 >10s 会在 Hobby 方案超时，建议升级 Pro 或仅演示非 LLM 端点
+- 前端（Streamlit）需单独部署（如 Streamlit Cloud），不在 Vercel 部署范围
