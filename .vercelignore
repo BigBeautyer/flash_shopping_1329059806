@@ -1,0 +1,37 @@
+# Large files that don't need to be deployed
+*.md
+!requirements.txt
+.git/
+.gitignore
+.vercelignore
+.claude/
+frontend/
+agents.pdf
+flash_sale_dev_plan.md
+GPT5.5-idea.md
+产品介绍.md
+agents.md
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Data files
+*.db
+*.sqlite3
+*.pkl
+*.joblib
+backend/data/
+
+# Tests
+tests/
+test_*.py
+*_test.py
+
+# OS files
+.DS_Store
+Thumbs.db
