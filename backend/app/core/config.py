@@ -1,17 +1,30 @@
 """Application configuration loaded from environment variables."""
 
+import os
 from pydantic_settings import BaseSettings
 from pathlib import Path
+
+# Vercel serverless: read-only filesystem, only /tmp is writable
+_IS_VERCEL = bool(os.environ.get("VERCEL"))
+
+# Local project root (used for non-I/O path resolution)
+_PROJECT_ROOT = Path(__file__).parent.parent
+
+# Writable data directory: /tmp on Vercel, backend/app/data/ locally
+if _IS_VERCEL:
+    _DATA_DIR = Path("/tmp/data")
+else:
+    _DATA_DIR = _PROJECT_ROOT / "data"
 
 
 class Settings(BaseSettings):
     # Project paths
-    PROJECT_ROOT: Path = Path(__file__).parent.parent
-    DATA_DIR: Path = PROJECT_ROOT / "data"
+    PROJECT_ROOT: Path = _PROJECT_ROOT
+    DATA_DIR: Path = _DATA_DIR
 
-    # Database
-    SQLITE_PATH: str = str(PROJECT_ROOT / "data" / "flash_sale.db")
-    CHROMA_PATH: str = str(PROJECT_ROOT / "data" / "chroma")
+    # Database (SQLite must live on writable filesystem)
+    SQLITE_PATH: str = str(_DATA_DIR / "flash_sale.db")
+    CHROMA_PATH: str = str(_DATA_DIR / "chroma")
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"

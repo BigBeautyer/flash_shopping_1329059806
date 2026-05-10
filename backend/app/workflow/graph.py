@@ -7,6 +7,10 @@ Flow:
 
 Interrupt-before on checkpoint nodes ensures operator sees agent output
 BEFORE deciding to approve/reject.
+
+IMPORTANT: All agent and graph initialization is LAZY — nothing touches
+the filesystem or network at import time. This is critical for serverless
+environments (Vercel) where the deployment filesystem is read-only.
 """
 
 import logging
@@ -17,21 +21,58 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 
 from app.workflow.state import CampaignState
 from app.agents.base import TaskProtocol
-from app.agents.planner_agent import PlannerAgent
-from app.agents.selection_agent import SelectionAgent
-from app.agents.pricing_agent import PricingAgent
-from app.agents.copywriting_agent import CopywritingAgent
-from app.agents.review_agent import ReviewAgent
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Singleton agents
-planner = PlannerAgent()
-selection = SelectionAgent()
-pricing = PricingAgent()
-copywriting = CopywritingAgent()
-review = ReviewAgent()
+# ═══════════════ Lazy singletons (no I/O at import time) ═══════════════
+
+_planner = None
+_selection = None
+_pricing = None
+_copywriting = None
+_review = None
+_campaign_graph = None
+
+
+def _get_planner():
+    global _planner
+    if _planner is None:
+        from app.agents.planner_agent import PlannerAgent
+        _planner = PlannerAgent()
+    return _planner
+
+
+def _get_selection():
+    global _selection
+    if _selection is None:
+        from app.agents.selection_agent import SelectionAgent
+        _selection = SelectionAgent()
+    return _selection
+
+
+def _get_pricing():
+    global _pricing
+    if _pricing is None:
+        from app.agents.pricing_agent import PricingAgent
+        _pricing = PricingAgent()
+    return _pricing
+
+
+def _get_copywriting():
+    global _copywriting
+    if _copywriting is None:
+        from app.agents.copywriting_agent import CopywritingAgent
+        _copywriting = CopywritingAgent()
+    return _copywriting
+
+
+def _get_review():
+    global _review
+    if _review is None:
+        from app.agents.review_agent import ReviewAgent
+        _review = ReviewAgent()
+    return _review
 
 
 # ═══════════════ Agent Nodes ═══════════════
@@ -48,7 +89,7 @@ def planner_node(state: CampaignState) -> CampaignState:
         },
         constraints=state["constraints"],
     )
-    output = planner.invoke(task)
+    output = _get_planner().invoke(task)
     state["planner_output"] = output.to_dict()
     state["task_queue"] = output.result.get("tasks", [])
     return state
@@ -67,7 +108,7 @@ def selection_node(state: CampaignState) -> CampaignState:
         },
         constraints=state["constraints"],
     )
-    output = selection.invoke(task)
+    output = _get_selection().invoke(task)
     state["selection_output"] = output.to_dict()
     state["status"] = "awaiting_selection_review"
     return state
@@ -86,7 +127,7 @@ def pricing_node(state: CampaignState) -> CampaignState:
         },
         constraints=state["constraints"],
     )
-    output = pricing.invoke(task)
+    output = _get_pricing().invoke(task)
     state["pricing_output"] = output.to_dict()
     return state
 
@@ -104,7 +145,7 @@ def copywriting_node(state: CampaignState) -> CampaignState:
         },
         constraints=state["constraints"],
     )
-    output = copywriting.invoke(task)
+    output = _get_copywriting().invoke(task)
     state["copywriting_output"] = output.to_dict()
     return state
 
