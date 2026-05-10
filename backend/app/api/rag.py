@@ -7,8 +7,15 @@ from app.services.knowledge_base import KnowledgeBase, seed_knowledge_base
 
 router = APIRouter(prefix="/api/rag", tags=["rag"])
 
-# Singleton
-kb = seed_knowledge_base()
+# Lazy singleton — don't touch ChromaDB at import time (crashes on Vercel read-only FS)
+_kb = None
+
+
+def _get_kb():
+    global _kb
+    if _kb is None:
+        _kb = seed_knowledge_base()
+    return _kb
 
 
 class IngestRequest(BaseModel):
@@ -30,7 +37,7 @@ class SearchRequest(BaseModel):
 @router.get("/stats")
 def get_stats():
     """Get knowledge base statistics."""
-    return kb.get_stats()
+    return _get_kb().get_stats()
 
 
 @router.get("/search")
@@ -40,7 +47,7 @@ def search_docs(
     top_k: int = Query(default=5, ge=1, le=20),
 ):
     """Search the knowledge base."""
-    results = kb.retrieve(q, doc_type=doc_type, top_k=top_k)
+    results = _get_kb().retrieve(q, doc_type=doc_type, top_k=top_k)
     return {
         "query": q,
         "doc_type": doc_type,
@@ -52,7 +59,7 @@ def search_docs(
 @router.post("/search")
 def search_docs_post(req: SearchRequest):
     """Search the knowledge base (POST)."""
-    results = kb.retrieve(req.query, doc_type=req.doc_type, top_k=req.top_k)
+    results = _get_kb().retrieve(req.query, doc_type=req.doc_type, top_k=req.top_k)
     return {
         "query": req.query,
         "doc_type": req.doc_type,
@@ -64,7 +71,7 @@ def search_docs_post(req: SearchRequest):
 @router.post("/ingest")
 def ingest_document(req: IngestRequest):
     """Ingest a single document into the knowledge base."""
-    doc_id = kb.ingest_document(
+    doc_id = _get_kb().ingest_document(
         title=req.title,
         content=req.content,
         doc_type=req.doc_type,
@@ -77,5 +84,5 @@ def ingest_document(req: IngestRequest):
 @router.post("/seed")
 def seed_kb():
     """Re-seed the knowledge base with default playbooks."""
-    seed_knowledge_base(kb)
-    return {"status": "seeded", "stats": kb.get_stats()}
+    seed_knowledge_base(_get_kb())
+    return {"status": "seeded", "stats": _get_kb().get_stats()}

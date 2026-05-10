@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 from langgraph.types import Command
 
-from app.workflow.graph import campaign_graph
+from app.workflow.graph import get_campaign_graph
 from app.workflow.state import CampaignState
 from app.db.models import SessionLocal, Campaign, CampaignTask, CampaignApproval
 
@@ -89,7 +89,7 @@ def create_campaign(req: CreateCampaignRequest):
 
     # Start workflow execution — runs planner + selection, then pauses at selection_review
     config = {"configurable": {"thread_id": thread_id}}
-    result = campaign_graph.invoke(initial_state, config)
+    result = get_campaign_graph().invoke(initial_state, config)
 
     return {
         "campaign_id": campaign_id,
@@ -105,7 +105,7 @@ def get_campaign_state(campaign_id: str):
     """Get current workflow state for a campaign."""
     config = {"configurable": {"thread_id": campaign_id}}
     try:
-        state = campaign_graph.get_state(config)
+        state = get_campaign_graph().get_state(config)
         if state is None:
             raise HTTPException(status_code=404, detail="Campaign not found")
         # Return serializable state
@@ -139,12 +139,12 @@ def approve_selection(campaign_id: str, req: ApprovalRequest):
     Rejected → goes back to selection agent to redo.
     """
     config = {"configurable": {"thread_id": campaign_id}}
-    state = campaign_graph.get_state(config)
+    state = get_campaign_graph().get_state(config)
     if state is None:
         raise HTTPException(status_code=404, detail="Campaign not found")
 
     # Update state with approval decision (include approved/rejected SKU lists)
-    campaign_graph.update_state(
+    get_campaign_graph().update_state(
         config,
         {
             "selection_approved": req.approved,
@@ -156,7 +156,7 @@ def approve_selection(campaign_id: str, req: ApprovalRequest):
 
     if not req.approved:
         # Rejected: resume → goes back to selection_node via route_selection
-        result = campaign_graph.invoke(Command(resume={"selection_approved": False}), config)
+        result = get_campaign_graph().invoke(Command(resume={"selection_approved": False}), config)
         return {
             "campaign_id": campaign_id,
             "status": result.get("status", "draft"),
@@ -170,13 +170,13 @@ def approve_selection(campaign_id: str, req: ApprovalRequest):
         sel_result = selection_output.get("result", {})
         full_list = sel_result.get("selection_list", [])
         filtered_list = [p for p in full_list if p.get("sku_id") in set(req.approved_skus)]
-        campaign_graph.update_state(
+        get_campaign_graph().update_state(
             config,
             {"selection_output": {**selection_output, "result": {**sel_result, "selection_list": filtered_list}}},
         )
 
     # Resume → continues to pricing → copywriting → review → final_review checkpoint
-    result = campaign_graph.invoke(Command(resume={"selection_approved": True}), config)
+    result = get_campaign_graph().invoke(Command(resume={"selection_approved": True}), config)
     return {
         "campaign_id": campaign_id,
         "status": result.get("status", "awaiting_final_review"),
@@ -197,17 +197,17 @@ def approve_final(campaign_id: str, req: ApprovalRequest):
     Rejected → goes back to review agent.
     """
     config = {"configurable": {"thread_id": campaign_id}}
-    state = campaign_graph.get_state(config)
+    state = get_campaign_graph().get_state(config)
     if state is None:
         raise HTTPException(status_code=404, detail="Campaign not found")
 
-    campaign_graph.update_state(
+    get_campaign_graph().update_state(
         config,
         {"final_approved": req.approved, "status": "completed" if req.approved else "draft"},
     )
 
     if not req.approved:
-        result = campaign_graph.invoke(Command(resume={"final_approved": False}), config)
+        result = get_campaign_graph().invoke(Command(resume={"final_approved": False}), config)
         return {
             "campaign_id": campaign_id,
             "status": result.get("status", "awaiting_final_review"),
@@ -215,7 +215,7 @@ def approve_final(campaign_id: str, req: ApprovalRequest):
         }
 
     # Approved: end
-    result = campaign_graph.invoke(Command(resume={"final_approved": True}), config)
+    result = get_campaign_graph().invoke(Command(resume={"final_approved": True}), config)
 
     # Persist approval
     db = SessionLocal()

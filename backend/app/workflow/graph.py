@@ -252,4 +252,14 @@ def build_workflow() -> StateGraph:
     )
 
 
-campaign_graph = build_workflow()
+def get_campaign_graph() -> StateGraph:
+    """Lazily build and cache the campaign workflow graph.
+
+    Building at import time crashes on serverless platforms (Vercel) because
+    it tries to create directories and SQLite files on a read-only filesystem.
+    """
+    global _campaign_graph
+    if _campaign_graph is not None:
+        return _campaign_graph
+    _campaign_graph = build_workflow()
+    return _campaign_graph
