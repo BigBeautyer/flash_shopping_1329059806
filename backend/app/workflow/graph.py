@@ -166,7 +166,7 @@ def review_node(state: CampaignState) -> CampaignState:
         },
         constraints=state["constraints"],
     )
-    output = review.invoke(task)
+    output = _get_review().invoke(task)
     state["final_review_output"] = output.to_dict()
     state["status"] = "awaiting_final_review"
     return state
